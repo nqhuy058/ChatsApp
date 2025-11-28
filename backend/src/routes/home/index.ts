@@ -1,0 +1,20 @@
+import { Router } from "express";
+import userRoute from "./userRoute.js";
+import friendRequestRoute from "./friendRequestRoute.js";
+import friendRoute from "./friendRoute.js";
+import conversationRoute from "./conversationRoute.js";
+import messageRoute from "./messageRoute.js";
+import uploadRoute from "./uploadRoute.js";
+import notificationRoute from "./notificationRoute.js";
+
+const router: Router = Router();
+
+router.use("/users", userRoute);
+router.use("/friend-requests", friendRequestRoute);
+router.use("/friends", friendRoute);
+router.use("/conversations", conversationRoute);
+router.use("/messages", messageRoute);
+router.use("/upload", uploadRoute);
+router.use("/notifications", notificationRoute);
+
+export default router;

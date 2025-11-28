@@ -1,0 +1,39 @@
+import mongoose, { Schema } from "mongoose";
+import { IFriend } from "../types/modelsType/friend";
+
+const friendSchema = new Schema<IFriend>(
+  {
+    userA: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    userB: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+  },
+  {
+    timestamps: true,
+    collection: "friends",
+  }
+);
+
+friendSchema.pre("save", async function () {
+  // Lưu ý: Không cần tham số 'next' ở trên
+  const a = this.userA.toString();
+  const b = this.userB.toString();
+
+  if (a > b) {
+    this.userA = new mongoose.Types.ObjectId(b);
+    this.userB = new mongoose.Types.ObjectId(a);
+  }
+
+});
+
+friendSchema.index({ userA: 1, userB: 1 }, { unique: true });
+
+const Friend = mongoose.model<IFriend>("Friend", friendSchema);
+
+export default Friend;
