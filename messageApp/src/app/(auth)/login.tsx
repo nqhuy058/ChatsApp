@@ -1,6 +1,7 @@
 import ShareButton from "@/components/button/share.button";
 import ShareInput from "@/components/input/share.input";
 import { APP_COLOR } from "@/utils/constant";
+import { useAuth } from '@/context/auth.context';
 import { LoginSchema } from "@/utils/validate.schema";
 import { loginAPI } from "@/utils/api";
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -87,6 +88,7 @@ const styles = StyleSheet.create({
 
 const LoginPage = () => {
     const [loading, setLoading] = useState(false);
+    const { login } = useAuth();
 
     const handleLogin = async (values: { email: string, password: string }) => {
         setLoading(true);
@@ -96,16 +98,10 @@ const LoginPage = () => {
             const res = await loginAPI(email, password);
 
             // Sửa ở đây: Kiểm tra sự tồn tại của `res.accessToken`
-            if (res && res.accessToken) {
-                Toast.show({
-                    type: 'success',
-                    text1: 'Đăng nhập thành công!'
-                });
-                // Đăng nhập thành công, lưu access token với đúng tên trường
-                await AsyncStorage.setItem('access_token', res.accessToken);
+            if (res && res.accessToken && res.user) {
+                await login({ accessToken: res.accessToken, user: res.user });
 
-                // Điều hướng đến màn hình chính, không cho quay lại
-                router.replace("/(tabs)/chats");
+                Toast.show({ type: 'success', text1: 'Đăng nhập thành công!' });
             } else {
                 const message = Array.isArray(res.message) ? res.message.join(', ') : res.message;
                 Toast.show({

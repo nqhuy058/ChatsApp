@@ -89,135 +89,96 @@ const getMessages = async (req: AuthRequest, res: Response): Promise<void> => {
 /**
  * Gửi tin nhắn mới (Đã tối ưu Notification)
  */
-const sendMessage = async (req: AuthRequest, res: Response): Promise<void> => {
+const sendMessage = async (req: AuthRequest, res: Response): Promise<any> => {
   try {
     if (!req.user) {
-      res.status(401).json({ message: "Chưa đăng nhập" });
-      return;
+      return res.status(401).json({ message: "Chưa đăng nhập" });
     }
 
-    const { conversationId, content, imgUrl } = req.body;
-
-    if (!conversationId || !mongoose.Types.ObjectId.isValid(conversationId)) {
-      res.status(400).json({ message: "conversationId không hợp lệ" });
-      return;
-    }
+    const { conversationId: existingConvId, recipientId, content, imgUrl } = req.body;
+    const senderId = req.user._id;
 
     if (!content && !imgUrl) {
-      res.status(400).json({ message: "Tin nhắn phải có nội dung hoặc hình ảnh" });
-      return;
+      return res.status(400).json({ message: "Tin nhắn phải có nội dung hoặc hình ảnh" });
     }
 
-    const conversation = await Conversation.findById(conversationId);
+    let conversation: any;
+
+    if (existingConvId && mongoose.Types.ObjectId.isValid(existingConvId)) {
+      conversation = await Conversation.findById(existingConvId);
+      if (!conversation) {
+        return res.status(404).json({ message: "Không tìm thấy conversation" });
+      }
+    }
+    else if (recipientId && mongoose.Types.ObjectId.isValid(recipientId)) {
+      if (senderId.toString() === recipientId) {
+        return res.status(400).json({ message: "Không thể tự gửi tin nhắn cho chính mình" });
+      }
+
+      const existingConversation = await Conversation.findOne({
+        type: 'direct',
+        'participants.userId': { $all: [senderId, recipientId] },
+      });
+
+      if (existingConversation) {
+        conversation = existingConversation;
+      } else {
+        conversation = await Conversation.create({
+          type: 'direct',
+          participants: [
+            { userId: senderId },
+            { userId: recipientId }
+          ],
+          lastMessage: null,
+        });
+      }
+    }
+
     if (!conversation) {
-      res.status(404).json({ message: "Không tìm thấy conversation" });
-      return;
+      return res.status(400).json({ message: "Cần cung cấp conversationId hoặc recipientId hợp lệ" });
     }
 
-    // Check member
     const isMember = conversation.participants.some(
-      p => p.userId.toString() === req.user!._id.toString()
+      (p: any) => p.userId.toString() === senderId.toString()
     );
 
     if (!isMember) {
-      res.status(403).json({ message: "Bạn không phải thành viên cuộc trò chuyện này" });
-      return;
+      return res.status(403).json({ message: "Bạn không phải thành viên cuộc trò chuyện này" });
     }
 
-    // --- TRANSACTION ---
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    // --- BỎ TRANSACTION ---
+    // 1. Tạo Message mới
+    const newMessage = new Message({
+      conversationId: conversation._id,
+      senderId: senderId,
+      content: content || undefined,
+      imgUrl: imgUrl || undefined,
+    });
 
-    try {
-      // 1. Tạo Message
-      const messageData = await Message.create([{
-        conversationId: new mongoose.Types.ObjectId(conversationId),
-        senderId: req.user._id,
-        content: content || undefined,
-        imgUrl: imgUrl || undefined,
-        isRecall: false
-      }], { session });
+    // 2. Lưu tin nhắn và cập nhật conversation song song để tăng tốc
+    const [savedMessage, updatedConversation] = await Promise.all([
+      newMessage.save(),
+      Conversation.findByIdAndUpdate(conversation._id, { lastMessage: newMessage._id })
+    ]);
 
-      const message = messageData[0];
+    // 3. Populate và Trả về Client
+    const populatedMessage = await savedMessage.populate("senderId", USER_POPULATE_FIELDS_MINIMAL);
 
-      // 2. Update Conversation (Last Message + Unread Count)
-      const now = new Date();
-      conversation.lastMessage = {
-        _id: message._id.toString(),
-        content: message.content,
-        senderId: req.user._id,
-        createdAt: message.createdAt
-      };
-      conversation.lastMessageAt = now;
+    res.status(201).json({
+      message: "Gửi tin nhắn thành công",
+      data: populatedMessage
+    });
 
-      // Reset seenBy -> Chỉ người gửi là đã xem
-      conversation.seenBy = [req.user._id];
-
-      // Tăng unread count cho các thành viên khác
-      conversation.participants.forEach(p => {
-        const pId = p.userId.toString();
-        if (pId !== req.user!._id.toString()) {
-          const current = conversation.unreadCounts.get(pId) || 0;
-          conversation.unreadCounts.set(pId, current + 1);
-        }
-      });
-
-      await conversation.save({ session });
-      await session.commitTransaction();
-
-      // --- END TRANSACTION ---
-
-      // 3. Populate và Trả về Client ngay (để UI phản hồi nhanh)
-      await message.populate("senderId", USER_POPULATE_FIELDS_MINIMAL);
-
-      res.status(201).json({
-        message: "Gửi tin nhắn thành công",
-        data: message
-      });
-
-      // 4. Xử lý các tác vụ phụ (Socket + Noti) - KHÔNG để chặn response
-
-      // Emit Socket (Realtime) - Gửi cho người nhận (KHÔNG gửi cho chính người gửi vì đã có trong response)
-      const receiverIds = conversation.participants
-        .map(p => p.userId.toString())
-        .filter(id => id !== req.user!._id.toString());
-      const socketReceiverIds = [...receiverIds, req.user!._id.toString()];
-      emitNewMessage(io, conversationId, message, socketReceiverIds);
-
-      // Gửi Notification (Async Non-blocking)
-      const { createNotification } = await import("./notificationController");
-      const messagePreview = content
-        ? (content.length > 50 ? content.substring(0, 50) + "..." : content)
-        : "Đã gửi một hình ảnh";
-      const groupName = conversation.group?.name || "nhóm";
-      const isGroup = conversation.type === "group";
-
-      // Dùng Promise.all để gửi song song cho nhanh
-      const notiPromises = conversation.participants
-        .filter(p => p.userId.toString() !== req.user!._id.toString())
-        .map(p => createNotification(
-          p.userId,
-          isGroup ? "group_message" : "message",
-          isGroup ? `Tin nhắn từ ${groupName}` : "Tin nhắn mới",
-          isGroup ? `${req.user!.display_name}: ${messagePreview}` : messagePreview,
-          conversation._id,
-          req.user!._id
-        ));
-
-      Promise.all(notiPromises).catch(err => console.error("Noti error:", err));
-
-    } catch (error) {
-      await session.abortTransaction();
-      throw error;
-    } finally {
-      session.endSession();
-    }
+    // 4. Xử lý Socket
+    const participantIds = conversation.participants.map((p: any) => p.userId.toString());
+    emitNewMessage(io, conversation._id.toString(), populatedMessage, participantIds);
 
   } catch (error) {
     console.error("Send message error:", error);
     res.status(500).json({ message: "Lỗi server" });
   }
 };
+
 
 /**
  * Chỉnh sửa tin nhắn
