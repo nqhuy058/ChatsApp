@@ -41,7 +41,8 @@ const register = async (req: Request, res: Response): Promise<void> => {
     const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || "10", 10);
     const hash_password = await bcrypt.hash(password, saltRounds);
 
-    await User.create({
+    // 1. Lưu lại kết quả của User.create
+    const newUser = await User.create({
       user_name,
       hash_password,
       email,
@@ -49,7 +50,8 @@ const register = async (req: Request, res: Response): Promise<void> => {
       sessions: []
     });
 
-    res.status(201).json({ message: "Đăng ký thành công" });
+    // 2. Trả về đối tượng user mới trong response
+    res.status(201).json({ message: "Đăng ký thành công", user: newUser });
   } catch (error) {
     res.status(500).json({ message: "Lỗi server khi đăng ký" });
   }
@@ -84,8 +86,8 @@ const login = async (req: Request, res: Response): Promise<void> => {
     // 1. Tạo Access Token
     const accessToken = jwt.sign(
       { userId: user._id },
-      // SỬA Ở ĐÂY: Dùng đúng tên biến JWT_SECRET từ file .env
-      process.env.JWT_SECRET!, 
+      // SỬA Ở ĐÂY: Dùng đúng tên biến ACCESS_TOKEN_SECRET
+      process.env.ACCESS_TOKEN_SECRET!, 
       { expiresIn: ACCESS_TOKEN_TTL }
     );
 

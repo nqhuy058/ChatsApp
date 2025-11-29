@@ -2,6 +2,9 @@ import { Response, NextFunction } from "express";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import User from "../models/User.js";
 import { AuthRequest } from "../types/express.js";
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 export const protectedRoute = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
