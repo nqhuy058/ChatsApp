@@ -9,6 +9,7 @@ import { Formik } from 'formik';
 import React, { useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 
 const ForgotPasswordModal = () => {
     const [loading, setLoading] = useState(false);
@@ -21,7 +22,7 @@ const ForgotPasswordModal = () => {
         const { code, password } = values;
 
         if (!email) {
-            Alert.alert("Lỗi", "Không tìm thấy email. Vui lòng thử lại từ đầu.");
+            Toast.show({ type: 'error', text1: 'Lỗi', text2: 'Không tìm thấy email. Vui lòng thử lại.' });
             setLoading(false);
             return;
         }
@@ -30,42 +31,54 @@ const ForgotPasswordModal = () => {
             // --- BƯỚC 1: Xác thực OTP để lấy resetToken ---
             const verifyRes = await verifyOtpAPI(email, code);
 
-            if (verifyRes && verifyRes.data?.resetToken) {
-                const resetToken = verifyRes.data.resetToken;
+            if (verifyRes && verifyRes.resetToken) {
+                const resetToken = verifyRes.resetToken;
 
                 // --- BƯỚC 2: Dùng resetToken để đặt lại mật khẩu ---
                 const resetRes = await resetPasswordAPI(resetToken, password);
 
-                if (resetRes && resetRes.statusCode === 200) {
-                    Alert.alert('Thành công', resetRes.message as string);
+                // 2. Sửa logic kiểm tra và thay bằng Toast
+                if (resetRes && resetRes.message && resetRes.message.toLowerCase().includes('thành công')) {
+                    Toast.show({
+                        type: 'success',
+                        text1: 'Thành công',
+                        text2: resetRes.message as string
+                    });
                     // Quay lại màn hình đăng nhập (2 lần back)
                     router.back();
                     router.back();
                 } else {
-                    Alert.alert("Lỗi", Array.isArray(resetRes.message) ? resetRes.message.join(', ') : resetRes.message);
+                    const message = Array.isArray(resetRes.message) ? resetRes.message.join(', ') : resetRes.message;
+                    Toast.show({ type: 'error', text1: 'Lỗi', text2: message });
                 }
 
             } else {
-                Alert.alert("Lỗi", Array.isArray(verifyRes.message) ? verifyRes.message.join(', ') : verifyRes.message);
+                const message = Array.isArray(verifyRes.message) ? verifyRes.message.join(', ') : verifyRes.message;
+                Toast.show({ type: 'error', text1: 'Mã OTP không hợp lệ', text2: message });
             }
         } catch (error: any) {
-            Alert.alert("Lỗi", error?.message ?? "Đã có lỗi xảy ra.");
+            Toast.show({ type: 'error', text1: 'Lỗi', text2: error?.message ?? "Đã có lỗi xảy ra." });
         } finally {
             setLoading(false);
         }
     };
 
-    // Xử lý gửi lại mã
+    // 3. Thay Alert bằng Toast trong hàm gửi lại mã
     const handleResendCode = async () => {
         if (!email) return;
         try {
             const res = await requestPasswordResetAPI(email);
-            Alert.alert("Thông báo", res.message as string);
+            Toast.show({
+                type: 'info',
+                text1: 'Thông báo',
+                text2: res.message as string
+            });
         } catch (error: any) {
-            Alert.alert("Lỗi", "Không thể gửi lại mã.");
+            Toast.show({ type: 'error', text1: 'Lỗi', text2: "Không thể gửi lại mã." });
         }
     }
-    
+
+
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView

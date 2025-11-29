@@ -18,6 +18,9 @@ declare global {
         first_name: string;
         last_name: string;
         avatar?: string;
+        display_name: string;
+        status?: 'online' | 'offline'; // 2. Thêm dòng này
+        lastSeen?: string;
     }
 
     // Kiểu dữ liệu trả về khi đăng ký thành công
@@ -35,5 +38,24 @@ declare global {
     interface IVerifyOtpRes {
         message: string;
         resetToken: string;
+    }
+
+    // Cấu trúc cho một tin nhắn cuối cùng trong cuộc trò chuyện
+    interface ILastMessage {
+        _id: string;
+        sender: string; // User ID
+        content: string;
+        createdAt: string; // ISO Date string
+    }
+
+    // Cấu trúc cho một cuộc trò chuyện
+    interface IConversation {
+        _id: string;
+        participants: IUser[];
+        lastMessage: ILastMessage;
+        isGroup: boolean;
+        groupName?: string;
+        groupAvatar?: string;
+        updatedAt: string; // ISO Date string
     }
 }

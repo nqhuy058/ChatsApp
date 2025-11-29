@@ -21,6 +21,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Toast from "react-native-toast-message";
 
 const styles = StyleSheet.create({
     safeArea: {
@@ -96,16 +97,29 @@ const LoginPage = () => {
 
             // Sửa ở đây: Kiểm tra sự tồn tại của `res.accessToken`
             if (res && res.accessToken) {
+                Toast.show({
+                    type: 'success',
+                    text1: 'Đăng nhập thành công!'
+                });
                 // Đăng nhập thành công, lưu access token với đúng tên trường
                 await AsyncStorage.setItem('access_token', res.accessToken);
 
                 // Điều hướng đến màn hình chính, không cho quay lại
                 router.replace("/(tabs)/chats");
             } else {
-                Alert.alert("Đăng nhập thất bại", Array.isArray(res.message) ? res.message.join(', ') : res.message);
+                const message = Array.isArray(res.message) ? res.message.join(', ') : res.message;
+                Toast.show({
+                    type: 'error',
+                    text1: 'Đăng nhập thất bại',
+                    text2: message
+                });
             }
         } catch (error: any) {
-            Alert.alert("Lỗi đăng nhập", error?.message ?? "Đã có lỗi xảy ra. Vui lòng thử lại.");
+            Toast.show({
+                type: 'error',
+                text1: 'Lỗi đăng nhập',
+                text2: error?.message ?? "Đã có lỗi xảy ra. Vui lòng thử lại."
+            });
         } finally {
             setLoading(false);
         }

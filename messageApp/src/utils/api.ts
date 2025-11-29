@@ -27,13 +27,26 @@ export const requestPasswordResetAPI = (email: string) => {
 // 2. API xác thực mã OTP, trả về resetToken
 export const verifyOtpAPI = (email: string, otp: string) => {
     const url = `/api/auth/verify-otp`;
-    return axios.post<IBackendRes<IVerifyOtpRes>>(url, { email, otp });
+    // Bỏ IBackendRes<> vì response không có cấu trúc đó
+    return axios.post<IVerifyOtpRes>(url, { email, otp });
 }
 
 // 3. API đặt lại mật khẩu mới, dùng resetToken
 export const resetPasswordAPI = (token: string, new_password: string) => {
     const url = `/api/auth/reset-password`;
     return axios.post<IBackendRes<any>>(url, { token, new_password });
+}
+
+// Lấy danh sách tất cả cuộc trò chuyện của người dùng
+export const getConversationsAPI = () => {
+    const url = `/api/home/conversations`;
+    return axios.get<IBackendRes<IConversation[]>>(url);
+}
+
+// Lấy danh sách bạn bè của người dùng
+export const getFriendsAPI = () => {
+    const url = `/api/home/friends`;
+    return axios.get<IBackendRes<IUser[]>>(url);
 }
 
 // export const verifyCodeAPI = (email: string, code: string) => {

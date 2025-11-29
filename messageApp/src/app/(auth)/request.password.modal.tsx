@@ -9,6 +9,7 @@ import { Formik } from 'formik';
 import React, { useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 
 const RequestPasswordModal = () => {
     const [loading, setLoading] = useState(false);
@@ -17,17 +18,37 @@ const RequestPasswordModal = () => {
         setLoading(true);
         try {
             const res = await requestPasswordResetAPI(values.email);
-            
+
             if (res && res.message) {
+                // 2. Hiển thị Toast thành công
+                Toast.show({
+                    type: 'success',
+                    text1: 'Thành công',
+                    text2: res.message
+                });
                 // Điều hướng đến màn hình nhập OTP và truyền email theo
                 router.push({ pathname: '/(auth)/forgot.password.modal', params: { email: values.email } });
+            } else {
+                // Xử lý trường hợp server trả về lỗi có chủ đích
+                const message = Array.isArray(res.message) ? res.message.join(', ') : res.message;
+                Toast.show({
+                    type: 'error',
+                    text1: 'Không thể gửi yêu cầu',
+                    text2: message || "Vui lòng thử lại."
+                });
             }
         } catch (error: any) {
-            Alert.alert("Lỗi", error?.message ?? "Đã có lỗi xảy ra.");
+            // 3. Thay thế Alert bằng Toast lỗi
+            Toast.show({
+                type: 'error',
+                text1: 'Lỗi',
+                text2: error?.message ?? "Đã có lỗi xảy ra."
+            });
         } finally {
             setLoading(false);
         }
     };
+
 
     return (
         <SafeAreaView style={styles.container}>

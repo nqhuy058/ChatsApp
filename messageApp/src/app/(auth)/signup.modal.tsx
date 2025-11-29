@@ -9,7 +9,8 @@ import { Formik } from 'formik';
 import React, { useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
 import { SafeAreaView } from "react-native-safe-area-context";
-import { registerAPI } from "@/utils/api"; // 1. Import hàm API
+import { registerAPI } from "@/utils/api";
+import Toast from "react-native-toast-message";
 
 const SignUpModal = () => {
     const [loading, setLoading] = useState(false);
@@ -35,15 +36,26 @@ const SignUpModal = () => {
 
             // Backend trả về message "Đăng ký thành công"
             if (res && res.message === "Đăng ký thành công") {
-                alert(res.message);
+                Toast.show({
+                    type: 'success',
+                    text1: 'Đăng ký thành công!',
+                    text2: 'Bây giờ bạn có thể đăng nhập.'
+                });
                 router.back();
             } else {
-                // Hiển thị lỗi từ server
-                alert(Array.isArray(res.message) ? res.message.join(', ') : res.message);
+                const message = Array.isArray(res.message) ? res.message.join(', ') : res.message;
+                Toast.show({
+                    type: 'error',
+                    text1: 'Đăng ký không thành công',
+                    text2: message
+                });
             }
         } catch (error: any) {
-            // Lỗi từ interceptor của axios, thường là lỗi mạng hoặc lỗi server 4xx/5xx
-            alert(error?.message ?? 'Đã có lỗi xảy ra. Vui lòng thử lại.');
+            Toast.show({
+                type: 'error',
+                text1: 'Đã có lỗi xảy ra',
+                text2: error?.message ?? 'Vui lòng kiểm tra lại kết nối.'
+            });
         } finally {
             setLoading(false);
         }
