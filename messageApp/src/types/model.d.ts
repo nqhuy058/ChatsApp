@@ -82,4 +82,15 @@ declare global {
             totalPages: number;
         };
     }
+
+    interface IMessage {
+        _id: string;
+        conversationId: string;
+        sender: IUser; // Backend populate thông tin người gửi
+        content: string;
+        type: 'text' | 'image' | 'video' | 'audio' | 'file';
+        createdAt: string; // ISO Date string
+        updatedAt: string; // ISO Date string
+    }
 }
+

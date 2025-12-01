@@ -50,3 +50,16 @@ export const getFriendsAPI = () => {
     // SỬA: Dùng kiểu IFriendsAPIResponse thay vì IBackendRes<...>
     return axios.get<IFriendsAPIResponse>(url);
 }
+
+export const getConversationByIdAPI = (id: string) => {
+    const url = `/api/home/conversations/${id}`;
+    // Dựa trên backend: conversationController.ts -> getConversationById
+    // trả về { message: string, conversation: IConversation }
+    return axios.get<{ message: string, conversation: IConversation }>(url);
+}
+
+export const getMessagesAPI = (conversationId: string) => {
+    const url = `/api/home/messages/${conversationId}`;
+    // Dựa trên messageController.ts -> getMessages
+    return axios.get<{ message: string, messages: IMessage[] }>(url);
+}
