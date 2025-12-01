@@ -17,36 +17,35 @@ const ChatsPage = () => {
 
     // Tối ưu hóa: Bọc logic fetch data trong useCallback để có thể tái sử dụng cho pull-to-refresh
     const fetchData = useCallback(async () => {
-        console.log("[ChatsPage] Bắt đầu lấy dữ liệu...");
         try {
             const [convResponse, friendsResponse] = await Promise.all([
                 getConversationsAPI(),
                 getFriendsAPI()
             ]);
 
-            console.log("[ChatsPage] Raw Conversations Response:", JSON.stringify(convResponse, null, 2));
-            console.log("[ChatsPage] Raw Friends Response:", JSON.stringify(friendsResponse, null, 2));
+            // console.log("[ChatsPage] Raw Conversations Response:", JSON.stringify(convResponse, null, 2));
+            // console.log("[ChatsPage] Raw Friends Response:", JSON.stringify(friendsResponse, null, 2));
 
             // SỬA LỖI CỐT LÕI: Truy cập `convResponse.conversations` thay vì `convResponse.data`
             if (convResponse && Array.isArray(convResponse.conversations)) {
-                console.log(`[ChatsPage] Lấy thành công ${convResponse.conversations.length} cuộc trò chuyện.`);
+                // console.log(`[ChatsPage] Lấy thành công ${convResponse.conversations.length} cuộc trò chuyện.`);
                 setConversations(convResponse.conversations);
             } else {
-                console.warn("[ChatsPage] Không có dữ liệu cuộc trò chuyện hoặc có lỗi từ BE:", convResponse?.message);
+                // console.warn("[ChatsPage] Không có dữ liệu cuộc trò chuyện hoặc có lỗi từ BE:", convResponse?.message);
                 setConversations([]);
             }
 
             // SỬA LỖI CỐT LÕI: Truy cập `friendsResponse.friends` thay vì `friendsResponse.data`
             if (friendsResponse && Array.isArray(friendsResponse.friends)) {
-                console.log(`[ChatsPage] Lấy thành công ${friendsResponse.friends.length} bạn bè.`);
+                // console.log(`[ChatsPage] Lấy thành công ${friendsResponse.friends.length} bạn bè.`);
                 setFriends(friendsResponse.friends);
             } else {
-                console.warn("[ChatsPage] Không có dữ liệu bạn bè hoặc có lỗi từ BE:", friendsResponse?.message);
+                // console.warn("[ChatsPage] Không có dữ liệu bạn bè hoặc có lỗi từ BE:", friendsResponse?.message);
                 setFriends([]);
             }
 
         } catch (error: any) {
-            console.error("[ChatsPage] Lỗi nghiêm trọng khi fetch dữ liệu:", error.message || error);
+            // console.error("[ChatsPage] Lỗi nghiêm trọng khi fetch dữ liệu:", error.message || error);
 
             if (error?.message === "Token đã hết hạn") {
                 Toast.show({
@@ -55,7 +54,7 @@ const ChatsPage = () => {
                     text2: 'Vui lòng đăng nhập lại.',
                     visibilityTime: 4000
                 });
-                console.warn("[ChatsPage] Token đã hết hạn. Đang tự động đăng xuất...");
+                // console.warn("[ChatsPage] Token đã hết hạn. Đang tự động đăng xuất...");
                 logout();
             } else {
                 Toast.show({

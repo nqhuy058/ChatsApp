@@ -84,6 +84,11 @@ const InitialLayout = () => {
                     name="(tabs)"
                     options={{ headerShown: false }}
                 />
+
+                <Stack.Screen
+                    name="chats/[conversationId]"
+                    options={{ headerShown: false }}
+                />
             </Stack>
         </ThemeProvider>
     );

@@ -1,5 +1,6 @@
 import { useAuth } from '@/context/auth.context'; // Tối ưu hóa: Import useAuth để lấy thông tin người dùng
 import { APP_COLOR } from '@/utils/constant';
+import { Link } from 'expo-router';
 import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -20,7 +21,7 @@ const ChatItem = ({ conversation }: { conversation: IConversation }) => {
         const otherParticipant = conversation.participants.find(
             p => p.userId._id !== currentUser._id
         );
-        
+
         if (otherParticipant && otherParticipant.userId) {
             const otherUser = otherParticipant.userId; // Đây là object IUser của người kia
             displayName = otherUser.display_name || otherUser.user_name;
@@ -44,17 +45,25 @@ const ChatItem = ({ conversation }: { conversation: IConversation }) => {
     const isUnread = !!conversation.unreadCount && conversation.unreadCount > 0;
 
     return (
-        <Pressable style={styles.chatItemContainer}>
-            <Image source={{ uri: avatarUrl }} style={styles.chatAvatar} />
-            <View style={styles.chatContent}>
-                <Text style={[styles.chatName, isUnread && styles.unreadText]} numberOfLines={1}>
-                    {displayName}
-                </Text>
-                <Text style={[styles.chatMessage, isUnread && styles.unreadText]} numberOfLines={1}>
-                    {lastMessageContent}{lastMessageTime ? ` · ${lastMessageTime}` : ''}
-                </Text>
-            </View>
-        </Pressable>
+        <Link
+            href={{
+                pathname: "/chats/[conversationId]", // Tên file route động
+                params: { conversationId: conversation._id } // Tham số truyền vào
+            }}
+            asChild
+        >
+            <Pressable style={styles.chatItemContainer}>
+                <Image source={{ uri: avatarUrl }} style={styles.chatAvatar} />
+                <View style={styles.chatContent}>
+                    <Text style={[styles.chatName, isUnread && styles.unreadText]} numberOfLines={1}>
+                        {displayName}
+                    </Text>
+                    <Text style={[styles.chatMessage, isUnread && styles.unreadText]} numberOfLines={1}>
+                        {lastMessageContent}{lastMessageTime ? ` · ${lastMessageTime}` : ''}
+                    </Text>
+                </View>
+            </Pressable>
+        </Link>
     );
 };
 
