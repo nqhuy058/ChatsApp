@@ -32,14 +32,16 @@ const register = async (req, res) => {
         }
         const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || "10", 10);
         const hash_password = await bcrypt.hash(password, saltRounds);
-        await User.create({
+        // 1. Lưu lại kết quả của User.create
+        const newUser = await User.create({
             user_name,
             hash_password,
             email,
             display_name: `${first_name} ${last_name}`,
             sessions: []
         });
-        res.status(201).json({ message: "Đăng ký thành công" });
+        // 2. Trả về đối tượng user mới trong response
+        res.status(201).json({ message: "Đăng ký thành công", user: newUser });
     }
     catch (error) {
         res.status(500).json({ message: "Lỗi server khi đăng ký" });
@@ -50,12 +52,14 @@ const register = async (req, res) => {
  */
 const login = async (req, res) => {
     try {
-        const { user_name, password } = req.body;
-        if (!user_name || !password) {
+        const { user_name: email_or_username, password } = req.body;
+        if (!email_or_username || !password) {
             res.status(400).json({ message: "Thiếu user_name hoặc password" });
             return;
         }
-        const user = await User.findOne({ user_name });
+        const user = await User.findOne({
+            $or: [{ email: email_or_username }, { user_name: email_or_username }],
+        });
         if (!user) {
             res.status(401).json({ message: "Sai username hoặc password" });
             return;
@@ -66,7 +70,9 @@ const login = async (req, res) => {
             return;
         }
         // 1. Tạo Access Token
-        const accessToken = jwt.sign({ userId: user._id }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: ACCESS_TOKEN_TTL });
+        const accessToken = jwt.sign({ userId: user._id }, 
+        // SỬA Ở ĐÂY: Dùng đúng tên biến ACCESS_TOKEN_SECRET
+        process.env.ACCESS_TOKEN_SECRET, { expiresIn: ACCESS_TOKEN_TTL });
         // 2. Tạo Refresh Token
         const refreshToken = crypto.randomBytes(64).toString("hex");
         // 3. Lưu Session

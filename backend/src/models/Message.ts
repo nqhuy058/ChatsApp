@@ -30,11 +30,12 @@ const messageSchema = new Schema<IMessage>(
       required: true,
       index: true,
     },
-    senderId: {
+    sender: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
+
     isRecall: {
       type: Boolean,
       default: false

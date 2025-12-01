@@ -9,6 +9,10 @@ import cookieParser from 'cookie-parser';
 import { protectedRoute } from './middlewares/authMiddleware.js';
 import { initializeSocket } from './libs/socket.js';
 dotenv.config();
+// --- THÊM DÒNG KIỂM TRA NÀY VÀO ĐÂY ---
+// console.log('--- DIAGNOSTIC CHECK ---');
+// console.log('ACCESS_TOKEN_SECRET IS:', process.env.ACCESS_TOKEN_SECRET);
+// console.log('------------------------');
 const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 8282;

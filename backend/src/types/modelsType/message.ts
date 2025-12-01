@@ -1,5 +1,5 @@
 import { Document, Types } from "mongoose";
-
+import { IUser } from "./user"; 
 /**
  * Interface cho reaction trên message
  */
@@ -14,7 +14,8 @@ export interface IReaction {
  */
 export interface IMessage extends Document {
   conversationId: Types.ObjectId;
-  senderId: Types.ObjectId;
+  // SỬA Ở ĐÂY: Đổi tên trường này và cho phép kiểu IUser khi populate
+  sender: Types.ObjectId | IUser; 
   isRecall: boolean;
   content?: string;
   imgUrl?: string;
@@ -23,3 +24,4 @@ export interface IMessage extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+

@@ -1,12 +1,16 @@
 import nodemailer from "nodemailer";
+import dotenv from 'dotenv';
+// 1. Thêm dòng này để file tự đọc .env
+dotenv.config();
 /**
  * Cấu hình transporter cho nodemailer
  */
 const transporter = nodemailer.createTransport({
-    service: "gmail", // Hoặc dùng SMTP khác
+    service: "gmail",
     auth: {
-        user: process.env.EMAIL_USER, // Email gửi
-        pass: process.env.EMAIL_PASSWORD, // App Password của Gmail
+        user: process.env.EMAIL_USER,
+        // 2. Sửa lại tên biến cho khớp với file .env
+        pass: process.env.EMAIL_PASS,
     },
 });
 /**

@@ -63,3 +63,11 @@ export const getMessagesAPI = (conversationId: string) => {
     // Dựa trên messageController.ts -> getMessages
     return axios.get<{ message: string, messages: IMessage[] }>(url);
 }
+
+export const sendMessageAPI = (conversationId: string, content: string) => {
+    // SỬA Ở ĐÂY: Thêm '/send' vào cuối
+    const url = `/api/home/messages/send`; 
+    const data = { conversationId, content }; 
+    // Dựa trên messageController.ts -> sendMessage, trả về { message, newMessage }
+    return axios.post<{ message: string; newMessage: IMessage }>(url, data);
+};

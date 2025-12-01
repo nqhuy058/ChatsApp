@@ -83,14 +83,25 @@ declare global {
         };
     }
 
-    interface IMessage {
+       interface IMessage {
         _id: string;
         conversationId: string;
-        sender: IUser; // Backend populate thông tin người gửi
+        // 'sender' có thể là object IUser (khi populate) hoặc string ID (khi chưa populate)
+        sender?: IUser | string; 
+        // Vẫn giữ 'senderId' để tương thích với dữ liệu backend hiện tại
+        senderId?: string; 
         content: string;
-        type: 'text' | 'image' | 'video' | 'audio' | 'file';
+        type?: 'text' | 'image' | 'video' | 'audio' | 'file'; // Đặt optional nếu có thể thiếu
+        isRecall?: boolean; // Từ log
+        reactions?: { // Từ log
+            userId: string;
+            type: string;
+            createdAt?: Date; // Có thể optional
+        }[];
         createdAt: string; // ISO Date string
         updatedAt: string; // ISO Date string
+        __v?: number; // Từ log
     }
+
 }
 
