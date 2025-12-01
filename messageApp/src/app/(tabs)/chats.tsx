@@ -1,83 +1,89 @@
 import ChatItem from '@/components/chats/chat.item';
-import { useAuth } from '@/context/auth.context'; 
+import { useAuth } from '@/context/auth.context';
 import { getConversationsAPI, getFriendsAPI } from '@/utils/api';
 import { APP_COLOR } from '@/utils/constant';
 import { Feather, FontAwesome, Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Button, FlatList, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react'; // Tối ưu hóa: Thêm useCallback
+import { ActivityIndicator, Button, FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native'; // Cải thiện UX: Thêm RefreshControl
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Toast from 'react-native-toast-message'; 
+import Toast from 'react-native-toast-message';
 
 const ChatsPage = () => {
     const [conversations, setConversations] = useState<IConversation[]>([]);
     const [friends, setFriends] = useState<IUser[]>([]);
     const [loading, setLoading] = useState(true);
-    const { logout, user } = useAuth(); 
+    const [isRefreshing, setIsRefreshing] = useState(false); // Cải thiện UX: State cho pull-to-refresh
+    const { logout, user } = useAuth();
 
-    useEffect(() => {
-        const fetchData = async () => {
-            console.log("[ChatsPage] Bắt đầu lấy dữ liệu...");
-            try {
-                // Gọi API song song để tăng tốc độ
-                const [convResponse, friendsResponse] = await Promise.all([
-                    getConversationsAPI(),
-                    getFriendsAPI()
-                ]);
+    // Tối ưu hóa: Bọc logic fetch data trong useCallback để có thể tái sử dụng cho pull-to-refresh
+    const fetchData = useCallback(async () => {
+        console.log("[ChatsPage] Bắt đầu lấy dữ liệu...");
+        try {
+            const [convResponse, friendsResponse] = await Promise.all([
+                getConversationsAPI(),
+                getFriendsAPI()
+            ]);
 
-                // --- LOGS ĐỂ KIỂM TRA DỮ LIỆU TỪ BACKEND ---
-                console.log("[ChatsPage] Raw Conversations Response (IBackendRes):", JSON.stringify(convResponse, null, 2));
-                console.log("[ChatsPage] Raw Friends Response (IBackendRes):", JSON.stringify(friendsResponse, null, 2));
+            console.log("[ChatsPage] Raw Conversations Response:", JSON.stringify(convResponse, null, 2));
+            console.log("[ChatsPage] Raw Friends Response:", JSON.stringify(friendsResponse, null, 2));
 
-                // Xử lý kết quả conversations
-                // Kiểm tra convResponse và convResponse.data để tránh lỗi null/undefined
-                if (convResponse && convResponse.data) {
-                    console.log(`[ChatsPage] Lấy thành công ${convResponse.data.length} cuộc trò chuyện.`);
-                    setConversations(convResponse.data);
-                } else {
-                    console.warn("[ChatsPage] Không có dữ liệu cuộc trò chuyện hoặc có lỗi từ BE:", convResponse?.message);
-                    setConversations([]);
-                }
-
-                // Xử lý kết quả friends
-                if (friendsResponse && friendsResponse.data) {
-                    console.log(`[ChatsPage] Lấy thành công ${friendsResponse.data.length} bạn bè.`);
-                    setFriends(friendsResponse.data);
-                } else {
-                    console.warn("[ChatsPage] Không có dữ liệu bạn bè hoặc có lỗi từ BE:", friendsResponse?.message);
-                    setFriends([]);
-                }
-
-            } catch (error: any) {
-                console.error("[ChatsPage] Lỗi nghiêm trọng khi fetch dữ liệu:", error.message || error);
-                
-                // --- SỬA LOGIC XỬ LÝ LỖI Ở ĐÂY ---
-                // error.message từ backend sẽ là "Token đã hết hạn"
-                if (error.message === "Token đã hết hạn") {
-                    Toast.show({
-                        type: 'error',
-                        text1: 'Phiên đăng nhập hết hạn',
-                        text2: 'Vui lòng đăng nhập lại.',
-                        visibilityTime: 4000
-                    });
-                    console.warn("[ChatsPage] Token đã hết hạn. Đang tự động đăng xuất...");
-                    logout(); // Tự động đăng xuất khi token hết hạn
-                } else {
-                    // Hiển thị toast cho các lỗi khác
-                    Toast.show({
-                        type: 'error',
-                        text1: 'Lỗi tải dữ liệu',
-                        text2: error.message || "Không thể tải dữ liệu chat.",
-                        visibilityTime: 4000
-                    });
-                }
-            } finally {
-                setLoading(false);
-                console.log("[ChatsPage] Hoàn tất quá trình lấy dữ liệu.");
+            // SỬA LỖI CỐT LÕI: Truy cập `convResponse.conversations` thay vì `convResponse.data`
+            if (convResponse && Array.isArray(convResponse.conversations)) {
+                console.log(`[ChatsPage] Lấy thành công ${convResponse.conversations.length} cuộc trò chuyện.`);
+                setConversations(convResponse.conversations);
+            } else {
+                console.warn("[ChatsPage] Không có dữ liệu cuộc trò chuyện hoặc có lỗi từ BE:", convResponse?.message);
+                setConversations([]);
             }
-        };
 
-        fetchData();
-    }, []); 
+            // SỬA LỖI CỐT LÕI: Truy cập `friendsResponse.friends` thay vì `friendsResponse.data`
+            if (friendsResponse && Array.isArray(friendsResponse.friends)) {
+                console.log(`[ChatsPage] Lấy thành công ${friendsResponse.friends.length} bạn bè.`);
+                setFriends(friendsResponse.friends);
+            } else {
+                console.warn("[ChatsPage] Không có dữ liệu bạn bè hoặc có lỗi từ BE:", friendsResponse?.message);
+                setFriends([]);
+            }
+
+        } catch (error: any) {
+            console.error("[ChatsPage] Lỗi nghiêm trọng khi fetch dữ liệu:", error.message || error);
+
+            if (error?.message === "Token đã hết hạn") {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Phiên đăng nhập hết hạn',
+                    text2: 'Vui lòng đăng nhập lại.',
+                    visibilityTime: 4000
+                });
+                console.warn("[ChatsPage] Token đã hết hạn. Đang tự động đăng xuất...");
+                logout();
+            } else {
+                Toast.show({
+                    type: 'error',
+                    text1: 'Lỗi tải dữ liệu',
+                    text2: error?.message || "Không thể tải dữ liệu chat.",
+                    visibilityTime: 4000
+                });
+            }
+        }
+    }, [logout]);
+
+    // Effect để fetch data lần đầu
+    useEffect(() => {
+        const initialFetch = async () => {
+            setLoading(true);
+            await fetchData();
+            setLoading(false);
+        };
+        initialFetch();
+    }, [fetchData]);
+
+    // Cải thiện UX: Thêm chức năng Pull-to-Refresh (kéo để làm mới)
+    const onRefresh = useCallback(async () => {
+        setIsRefreshing(true);
+        await fetchData();
+        setIsRefreshing(false);
+    }, [fetchData]);
 
     const handleLogout = async () => {
         await logout();
@@ -94,15 +100,25 @@ const ChatsPage = () => {
         </View>
     );
 
-    const renderOnlineFriend = ({ item }: { item: IUser }) => (
+    // Tối ưu hóa hiệu năng: Bọc render function trong useCallback
+    const renderOnlineFriend = useCallback(({ item }: { item: IUser }) => (
         <View style={styles.friendAvatarContainer}>
             <View>
-                <Image source={{ uri: item.avatar ?? 'https://via.placeholder.com/60' }} style={styles.friendAvatar} />
+                {/* Sửa: Dùng avatarURL từ log thay vì avatar, và cung cấp placeholder nếu null/undefined */}
+                <Image
+                    source={{ uri: item.avatarURL || 'https://via.placeholder.com/60/007bff/ffffff?text=' + (item.display_name?.[0]?.toUpperCase() || 'U') }}
+                    style={styles.friendAvatar}
+                />
                 {item.status === 'online' && <View style={styles.onlineDot} />}
             </View>
             <Text style={styles.friendName} numberOfLines={2}>{item.display_name}</Text>
         </View>
-    );
+    ), []);
+
+    // Tối ưu hóa hiệu năng: Bọc render function trong useCallback
+    const renderConversationItem = useCallback(({ item }: { item: IConversation }) => (
+        <ChatItem conversation={item} />
+    ), []);
 
     const ListHeaderComponent = () => (
         <>
@@ -141,20 +157,24 @@ const ChatsPage = () => {
         <SafeAreaView style={styles.container} edges={['top']}>
             <HomeHeader />
             <Button title="Đăng xuất" onPress={handleLogout} color="red" />
-            {user && <Text style={{textAlign: 'center', marginVertical: 5}}>Bạn đã đăng nhập: {user.display_name} ({user.user_name})</Text>}
+            {user && <Text style={{ textAlign: 'center', marginVertical: 5 }}>Bạn đã đăng nhập: {user.display_name} ({user.user_name})</Text>}
 
-            {conversations.length === 0 ? (
+            {conversations.length === 0 && !loading ? (
                 <View style={styles.emptyStateContainer}>
                     <Ionicons name="chatbubbles-outline" size={60} color={APP_COLOR.GREY} />
                     <Text style={styles.emptyText}>Chưa có cuộc trò chuyện nào</Text>
-                    <Text style={styles.emptySubText}>Hãy bắt đầu nhắn tin với bạn bè hoặc kiểm tra dữ liệu từ backend.</Text>
+                    <Text style={styles.emptySubText}>Hãy bắt đầu nhắn tin hoặc kéo xuống để làm mới.</Text>
                 </View>
             ) : (
                 <FlatList
                     data={conversations}
-                    renderItem={({ item }) => <ChatItem conversation={item} />}
+                    renderItem={renderConversationItem}
                     keyExtractor={item => item._id}
-                    ListHeaderComponent={ListHeaderComponent} 
+                    ListHeaderComponent={ListHeaderComponent}
+                    // Cải thiện UX: Thêm RefreshControl
+                    refreshControl={
+                        <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} colors={[APP_COLOR.BLUE]} />
+                    }
                 />
             )}
             <Pressable style={styles.fab}>
@@ -164,6 +184,7 @@ const ChatsPage = () => {
     );
 };
 
+// ... (phần styles không thay đổi, giữ nguyên như cũ)
 const styles = StyleSheet.create({
     container: {
         flex: 1,
