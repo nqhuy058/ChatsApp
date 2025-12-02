@@ -25,7 +25,7 @@ const ConversationDetailScreen = () => {
                 setLoading(true);
                 const [convoRes, messagesRes] = await Promise.all([getConversationByIdAPI(conversationId), getMessagesAPI(conversationId)]);
                 if (convoRes?.conversation) setConversation(convoRes.conversation);
-                if (messagesRes?.messages) setMessages(messagesRes.messages.reverse());
+                if (messagesRes?.messages) setMessages(messagesRes.messages);
             } catch (error: any) {
                 console.error("Lỗi khi tải dữ liệu chat:", error);
                 Toast.show({ type: 'error', text1: 'Lỗi tải dữ liệu', text2: error.message });
@@ -33,7 +33,7 @@ const ConversationDetailScreen = () => {
         };
         fetchAllData();
     }, [conversationId]);
-    
+
     // SỬA LỖI TRONG HÀM NÀY
     const handleSendMessage = async (content: string) => {
         if (!conversationId || typeof conversationId !== 'string' || !currentUser) return;
@@ -48,15 +48,16 @@ const ConversationDetailScreen = () => {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
+        // Thêm tin nhắn vào CUỐI MẢNG
         setMessages(prevMessages => [optimisticMessage, ...prevMessages]);
 
         try {
             const res = await sendMessageAPI(conversationId, content);
-            
+
             // THÊM BƯỚC KIỂM TRA QUAN TRỌNG
             if (res && res.newMessage) {
                 const realMessage = res.newMessage;
-                // Chỉ cập nhật nếu tin nhắn thật tồn tại
+                // Cập nhật tin nhắn trong mảng, vị trí của nó sẽ không thay đổi
                 setMessages(prevMessages =>
                     prevMessages.map(msg => (msg._id === tempId ? realMessage : msg))
                 );
