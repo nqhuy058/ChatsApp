@@ -6,7 +6,7 @@ import crypto from "crypto";
 import { sendOTPEmail, sendPasswordResetSuccessEmail } from "../utils/emailService.js";
 
 // Cấu hình thời gian
-const ACCESS_TOKEN_TTL = '30m';
+const ACCESS_TOKEN_TTL = '3d';
 const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60 * 1000; // 7 ngày
 
 // --- CẤU HÌNH COOKIE CHUẨN ---

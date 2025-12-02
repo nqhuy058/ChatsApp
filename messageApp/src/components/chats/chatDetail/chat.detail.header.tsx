@@ -5,13 +5,18 @@ import { router } from 'expo-router';
 import React from 'react';
 import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
 
-const ChatDetailHeader = ({ conversation }: { conversation: IConversation }) => {
+// THAY ĐỔI: Định nghĩa props cho ChatDetailHeader để nhận hàm formatLastSeen
+interface ChatDetailHeaderProps {
+    conversation: IConversation;
+    formatLastSeen: (dateString: string | Date) => string; // <--- THÊM PROP NÀY
+}
+
+const ChatDetailHeader = ({ conversation, formatLastSeen }: ChatDetailHeaderProps) => { // <--- NHẬN PROP NÀY
     const { user: currentUser } = useAuth();
 
-    // Logic tìm người đối diện (tương tự như trong ChatItem)
     let displayName = "Loading...";
     let avatarUrl = "https://via.placeholder.com/40";
-    let activityStatus = "";
+    let activityStatus = "Đang tải..."; // Trạng thái mặc định
 
     if (currentUser && conversation) {
          if (conversation.type === 'group') {
@@ -19,14 +24,20 @@ const ChatDetailHeader = ({ conversation }: { conversation: IConversation }) => 
             avatarUrl = conversation.groupAvatar || `https://via.placeholder.com/40/808080/FFFFFF?text=G`;
             activityStatus = `${conversation.participants.length} thành viên`;
         } else {
-            // Tìm người tham gia không phải là user hiện tại
             const otherParticipant = conversation.participants.find(p => p.userId._id !== currentUser._id);
             if (otherParticipant?.userId) {
                 const otherUser = otherParticipant.userId;
                 displayName = otherUser.display_name;
                 avatarUrl = otherUser.avatarURL || `https://via.placeholder.com/40/007bff/ffffff?text=${(displayName[0] || 'U').toUpperCase()}`;
-                // Tạm thời hiển thị trạng thái, sẽ cải thiện sau với real-time socket
-                activityStatus = otherUser.status === 'online' ? 'Đang hoạt động' : `Hoạt động 5 phút trước`; 
+                
+                // THAY ĐỔI: Dùng status và lastSeen thực tế để tính toán activityStatus
+                if (otherUser.status === 'online') {
+                    activityStatus = 'Đang hoạt động';
+                } else if (otherUser.lastSeen) {
+                    activityStatus = formatLastSeen(otherUser.lastSeen); // <--- SỬ DỤNG HÀM formatLastSeen
+                } else {
+                    activityStatus = 'Chưa rõ trạng thái'; // Fallback nếu không có lastSeen
+                }
             }
         }
     }
@@ -45,7 +56,6 @@ const ChatDetailHeader = ({ conversation }: { conversation: IConversation }) => 
             </View>
 
             <View style={styles.actions}>
-                {/* Chỉ giữ lại nút Info vì backend chưa có chức năng gọi điện */}
                 <Pressable style={styles.actionButton}>
                     <SimpleLineIcons name="info" size={24} color={APP_COLOR.BLACK} />
                 </Pressable>

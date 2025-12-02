@@ -1,71 +1,129 @@
-import ChatDetailHeader from '@/components/chats/chat.detail.header';
-import ChatInput from '@/components/chats/chat.input';
-import MessageBubble from '@/components/chats/message.bubble';
+import ChatDetailHeader from '@/components/chats/chatDetail/chat.detail.header';
+import ChatInput from '@/components/chats/chatDetail/chat.input';
+import MessageBubble from '@/components/chats/chatDetail/message.bubble';
 import { useAuth } from '@/context/auth.context';
 import { getConversationByIdAPI, getMessagesAPI, sendMessageAPI } from '@/utils/api';
 import { APP_COLOR } from '@/utils/constant';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ActivityIndicator, FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import io from 'socket.io-client';
 
-const SOCKET_SERVER_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8282'; 
+const SOCKET_SERVER_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8282';
 
 const ConversationDetailScreen = () => {
-    // ... (phần state và useEffect fetchAllData giữ nguyên không đổi)
     const { conversationId } = useLocalSearchParams();
     const { user: currentUser, token } = useAuth();
     const [conversation, setConversation] = useState<IConversation | null>(null);
     const [messages, setMessages] = useState<IMessage[]>([]);
     const [loading, setLoading] = useState(true);
-    const socketRef = useRef<any>(null); 
+    const socketRef = useRef<any>(null);
 
-     // Effect để thiết lập kết nối Socket.IO và lắng nghe sự kiện
+    // Hàm helper để định dạng thời gian hoạt động cuối cùng
+    const formatLastSeen = useCallback((dateString: string | Date): string => {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+        if (diffSeconds < 60) {
+            return 'Đang hoạt động';
+        } else if (diffSeconds < 3600) {
+            const minutes = Math.floor(diffSeconds / 60);
+            return `Hoạt động ${minutes} phút trước`;
+        } else if (diffSeconds < 86400) {
+            const hours = Math.floor(diffSeconds / 3600);
+            return `Hoạt động ${hours} giờ trước`;
+        } else if (diffSeconds < 604800) {
+            const days = Math.floor(diffSeconds / 86400);
+            return `Hoạt động ${days} ngày trước`;
+        } else {
+            return `Hoạt động ${date.toLocaleDateString('vi-VN')} lúc ${date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+        }
+    }, []);
+
+    // Helper để kiểm tra nếu ID là một optimistic temporary ID (chỉ là số và có độ dài nhất định)
+    const isOptimisticTempId = useCallback((id: string) => {
+        return /^\d+$/.test(id) && id.length > 10 && id.length < 16; // MongoDB ID ~24 ký tự hex. Date.now() ~13-14 chữ số
+    }, []);
+
+    // Effect để thiết lập kết nối Socket.IO và lắng nghe sự kiện
     useEffect(() => {
         if (!conversationId || typeof conversationId !== 'string') {
             console.warn("Frontend: conversationId is missing or invalid, skipping socket setup.");
             return;
         }
         if (!currentUser?._id) {
-             console.warn("Frontend: currentUser is missing, skipping socket setup.");
-             return;
+            console.warn("Frontend: currentUser is missing, skipping socket setup.");
+            return;
         }
-        if (!token) { // Kiểm tra token trước khi kết nối Socket.IO
+        if (!token) {
             console.warn("Frontend: Authentication token is missing, skipping socket connection.");
             return;
         }
 
-        console.log(`Frontend: Attempting to connect to Socket.IO at ${SOCKET_SERVER_URL}`);
         const newSocket = io(SOCKET_SERVER_URL, {
             transports: ['websocket'],
             auth: {
-                token: token // TRUYỀN TOKEN XÁC THỰC
+                token: token
             },
             query: { userId: currentUser._id }
         });
 
         newSocket.on('connect', () => {
-            console.log('Frontend: Socket.IO Connected!');
+
         });
 
         newSocket.on('new-message', ({ conversationId: receivedConversationId, message: newMessage }: { conversationId: string, message: IMessage }) => {
-            console.log('Frontend: Received new message via Socket.IO:', newMessage);
             if (receivedConversationId === conversationId) {
                 setMessages(prevMessages => {
-                    // Kiểm tra trùng lặp để tránh thêm tin nhắn 2 lần
-                    if (prevMessages.some(msg => msg._id === newMessage._id)) {
-                        return prevMessages;
+                    let updatedMessages = [...prevMessages];
+
+                    // FIX TypeScript error: Safely check sender before accessing _id
+                    const isCurrentUserMessageFromSocket = currentUser &&
+                        newMessage.sender &&
+                        typeof newMessage.sender === 'object' &&
+                        '_id' in newMessage.sender &&
+                        (newMessage.sender as IUser)._id === currentUser._id;
+
+                    // 1. Tìm và CẬP NHẬT tin nhắn nếu đã tồn tại với cùng _ID
+                    const existingMessageIndex = updatedMessages.findIndex(msg => msg._id === newMessage._id);
+
+                    if (existingMessageIndex !== -1) {
+                        // Nếu tin nhắn với ID này đã tồn tại, CẬP NHẬT nó
+                        updatedMessages[existingMessageIndex] = newMessage;
+                    } else if (isCurrentUserMessageFromSocket) {
+                        // 2. Nếu là tin nhắn của người dùng hiện tại (có ID thật từ backend)
+                        // và chưa có tin nhắn với ID này, HÃY TÌM và THAY THẾ tin nhắn lạc quan (optimistic)
+                        const optimisticMessageIndex = updatedMessages.findIndex(
+                            msg => isOptimisticTempId(msg._id) &&
+                                (msg.sender as IUser)?._id === currentUser._id && // Đảm bảo sender là object
+                                msg.content === newMessage.content // So khớp nội dung để chắc chắn là cùng một tin nhắn
+                        );
+
+                        if (optimisticMessageIndex !== -1) {
+                            // Thay thế tin nhắn lạc quan bằng tin nhắn thật từ socket
+                            updatedMessages[optimisticMessageIndex] = newMessage;
+                        } else {
+                            // Nếu không tìm thấy tin nhắn lạc quan để thay thế, chỉ thêm tin nhắn này vào
+                            // Điều này có thể xảy ra nếu API response nhanh hơn socket và đã thay thế rồi,
+                            // hoặc đây là một tin nhắn mới hoàn toàn.
+                            updatedMessages.unshift(newMessage);
+                        }
+                    } else {
+                        // 3. Tin nhắn từ người dùng khác, chỉ thêm vào danh sách
+                        updatedMessages.unshift(newMessage);
                     }
-                    // Thêm tin nhắn mới vào ĐẦU MẢNG vì FlatList là inverted
-                    return [newMessage, ...prevMessages];
+
+                    // Sắp xếp lại mảng để đảm bảo thứ tự đúng (mới nhất lên đầu)
+                    return updatedMessages.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
                 });
             } else {
-                console.log(`Frontend: Received message for other conversation (${receivedConversationId}). Current: ${conversationId}`);
+                
             }
         });
-        
+
         newSocket.on('message-updated', ({ conversationId: receivedConversationId, message: updatedMessage }: { conversationId: string, message: IMessage }) => {
             if (receivedConversationId === conversationId) {
                 setMessages(prevMessages =>
@@ -82,12 +140,36 @@ const ConversationDetailScreen = () => {
             }
         });
 
+        newSocket.on('user-status-update', ({ userId, status, lastSeen }: { userId: string, status: 'online' | 'offline', lastSeen?: string }) => {
+            setConversation(prevConvo => {
+                if (!prevConvo || prevConvo.type === 'group' || !currentUser) {
+                    return prevConvo;
+                }
+
+                const otherParticipantIndex = prevConvo.participants.findIndex(
+                    p => p.userId._id === userId && p.userId._id !== currentUser._id
+                );
+
+                if (otherParticipantIndex !== -1) {
+                    const updatedParticipants = [...prevConvo.participants];
+                    updatedParticipants[otherParticipantIndex] = {
+                        ...updatedParticipants[otherParticipantIndex],
+                        userId: {
+                            ...updatedParticipants[otherParticipantIndex].userId,
+                            status: status,
+                            lastSeen: lastSeen || updatedParticipants[otherParticipantIndex].userId.lastSeen
+                        }
+                    };
+                    return { ...prevConvo, participants: updatedParticipants };
+                }
+                return prevConvo;
+            });
+        });
+
         newSocket.on('disconnect', () => {
-            console.log('Frontend: Socket.IO Disconnected!');
         });
 
         newSocket.on('connect_error', (error: any) => {
-            console.error('Frontend: Socket.IO Connection Error:', error);
             Toast.show({ type: 'error', text1: 'Lỗi kết nối Real-time', text2: error.message });
         });
 
@@ -96,12 +178,11 @@ const ConversationDetailScreen = () => {
         return () => {
             if (socketRef.current) {
                 socketRef.current.disconnect();
-                console.log('Frontend: Socket.IO Disconnected during cleanup.');
                 socketRef.current = null;
             }
         };
-    }, [conversationId, currentUser?._id, token]);
-    
+    }, [conversationId, currentUser?._id, token, formatLastSeen, isOptimisticTempId]);
+
     // Effect để tải dữ liệu chat ban đầu
     useEffect(() => {
         const fetchAllData = async () => {
@@ -110,43 +191,32 @@ const ConversationDetailScreen = () => {
                 setLoading(true);
                 const [convoRes, messagesRes] = await Promise.all([getConversationByIdAPI(conversationId), getMessagesAPI(conversationId)]);
                 if (convoRes?.conversation) setConversation(convoRes.conversation);
-                
+
                 if (messagesRes?.messages) {
-                    // THAY ĐỔI TẠI ĐÂY: Hợp nhất và loại bỏ trùng lặp tin nhắn để tránh lỗi "same key"
                     setMessages(prevMessages => {
                         const newFetchedMessages = messagesRes.messages;
                         const uniqueMessages = new Map<string, IMessage>();
-                        
-                        // Thêm các tin nhắn hiện có từ state trước (ví dụ: optimistic message hoặc tin nhắn nhận qua socket trước khi fetch xong)
-                        // Giữ lại chúng và nếu có tin nhắn mới trùng ID, tin nhắn mới sẽ ghi đè.
+
                         prevMessages.forEach(msg => uniqueMessages.set(msg._id, msg));
-                        
-                        // Thêm các tin nhắn mới được tải về từ API, ghi đè nếu ID đã tồn tại
-                        // Điều này đảm bảo các tin nhắn từ API (có _id thật) sẽ là phiên bản chính xác nhất.
                         newFetchedMessages.forEach(msg => uniqueMessages.set(msg._id, msg));
-                        
-                        // Chuyển Map thành mảng, sắp xếp từ mới nhất đến cũ nhất
+
                         return Array.from(uniqueMessages.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
                     });
                 }
             } catch (error: any) {
-                console.error("Lỗi khi tải dữ liệu chat:", error);
                 Toast.show({ type: 'error', text1: 'Lỗi tải dữ liệu', text2: error.message });
             } finally { setLoading(false); }
         };
         fetchAllData();
-    }, [conversationId]); // Dependency chỉ vào conversationId cho lần tải ban đầu
+    }, [conversationId]);
 
-    // SỬA LỖI TRONG HÀM handleSendMessage
     const handleSendMessage = async (content: string) => {
-        // THAY ĐỔI TẠI ĐÂY: Thêm kiểm tra token để tránh lỗi "jwt malformed"
-        if (!conversationId || typeof conversationId !== 'string' || !currentUser || !token) { 
-            console.error("Frontend: Missing conversationId, currentUser, or token for sending message.");
+        if (!conversationId || typeof conversationId !== 'string' || !currentUser || !token) {
             Toast.show({ type: 'error', text1: 'Lỗi', text2: 'Không thể gửi tin nhắn do thiếu thông tin xác thực.' });
             return;
         }
 
-        const tempId = Date.now().toString();
+        const tempId = Date.now().toString(); // Temporary ID for optimistic update
         const optimisticMessage: IMessage = {
             _id: tempId,
             conversationId,
@@ -156,7 +226,6 @@ const ConversationDetailScreen = () => {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
-        // Thêm tin nhắn vào ĐẦU MẢNG vì FlatList là inverted
         setMessages(prevMessages => [optimisticMessage, ...prevMessages]);
 
         try {
@@ -164,7 +233,7 @@ const ConversationDetailScreen = () => {
 
             if (res && res.newMessage) {
                 const realMessage = res.newMessage;
-                // Cập nhật tin nhắn trong mảng, vị trí của nó sẽ không thay đổi
+                // Cập nhật tin nhắn trong mảng, thay thế optimistic message bằng real message
                 setMessages(prevMessages =>
                     prevMessages.map(msg => (msg._id === tempId ? realMessage : msg))
                 );
@@ -172,21 +241,19 @@ const ConversationDetailScreen = () => {
                 throw new Error("Server did not return a new message.");
             }
         } catch (error) {
-            console.error("Lỗi gửi tin nhắn:", error);
             Toast.show({ type: 'error', text1: 'Gửi tin nhắn thất bại' });
+            // Nếu gửi lỗi, xóa tin nhắn optimistic
             setMessages(prevMessages => prevMessages.filter(msg => msg._id !== tempId));
         }
     };
 
-
-    // ... (phần giao diện giữ nguyên không đổi)
     if (loading) return <View style={styles.centeredContainer}><ActivityIndicator size="large" color={APP_COLOR.BLUE} /></View>;
     if (!conversation) return <SafeAreaView style={styles.centeredContainer}><Text>Không thể tải thông tin cuộc trò chuyện.</Text></SafeAreaView>;
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <Stack.Screen options={{ headerShown: false }} />
-            <ChatDetailHeader conversation={conversation} />
+            <ChatDetailHeader conversation={conversation} formatLastSeen={formatLastSeen} />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.flex_1}

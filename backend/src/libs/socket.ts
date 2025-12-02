@@ -127,7 +127,7 @@ export const initializeSocket = (httpServer: HTTPServer) => {
       ioInstance.emit("user-status-update", {
         userId,
         status: "offline",
-        lastSeen: lastSeenNow
+       lastSeen: lastSeenNow.toISOString() 
       });
     });
   });
