@@ -3,8 +3,9 @@ import { AuthRequest } from "../types/express";
 import Message from "../models/Message";
 import Conversation from "../models/Convesation";
 import mongoose from "mongoose";
-import { io } from "../server"; // Import từ server hoặc file socket config
-import { emitNewMessage, emitMessageUpdated, emitMessageRecalled } from "../libs/socket";
+// import { io } from "../server"; 
+import { emitNewMessage, emitMessageUpdated,
+   emitMessageRecalled, getIO } from "../libs/socket";
 import { USER_POPULATE_FIELDS_MINIMAL } from "../utils/constants";
 
 const EDIT_TIME_LIMIT = 15 * 60 * 100000; // 15 phút
@@ -123,7 +124,8 @@ const sendMessage = async (req: AuthRequest, res: Response): Promise<any> => {
     });
 
     const participantIds = conversation.participants.map((p: any) => p.userId.toString());
-    emitNewMessage(io, conversation._id.toString(), populatedMessage, participantIds);
+    const ioInstance = getIO(); 
+    emitNewMessage(ioInstance, conversation._id.toString(), populatedMessage, participantIds); // <--- THAY ĐỔI TẠI ĐÂY: Sử dụng ioInstance
 
   } catch (error) {
     console.error("Send message error:", error);
@@ -166,7 +168,8 @@ const editMessage = async (req: AuthRequest, res: Response): Promise<void> => {
     const conversation = await Conversation.findById(message.conversationId);
     if (conversation) {
       const receiverIds = conversation.participants.map(p => p.userId.toString());
-      emitMessageUpdated(io, message.conversationId.toString(), message, receiverIds);
+      const ioInstance = getIO(); // <--- THAY ĐỔI TẠI ĐÂY
+      emitMessageUpdated(ioInstance, message.conversationId.toString(), message, receiverIds); // <--- THAY ĐỔI TẠI ĐÂY
     }
   } catch (error) {
     console.error("Edit message error:", error);
@@ -222,7 +225,8 @@ const recallMessage = async (req: AuthRequest, res: Response): Promise<void> => 
 
     if (conversation) {
       const receiverIds = conversation.participants.map(p => p.userId.toString());
-      emitMessageRecalled(io, message.conversationId.toString(), messageId, receiverIds);
+      const ioInstance = getIO(); // <--- THAY ĐỔI TẠI ĐÂY
+     emitMessageRecalled(ioInstance, message.conversationId.toString(), messageId, receiverIds); // <--- THAY ĐỔI TẠI ĐÂY
     }
   } catch (error) {
     console.error("Recall error:", error);

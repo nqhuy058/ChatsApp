@@ -13,6 +13,9 @@ interface OnlineUser {
   socketId: string;
 }
 
+// Biến io global
+let ioInstance: SocketIOServer;
+
 // Store online users
 const onlineUsers: OnlineUser[] = [];
 
@@ -20,7 +23,7 @@ const onlineUsers: OnlineUser[] = [];
  * Khởi tạo Socket.IO server
  */
 export const initializeSocket = (httpServer: HTTPServer) => {
-  const io = new SocketIOServer(httpServer, {
+  ioInstance = new SocketIOServer(httpServer, {
     cors: {
       origin: process.env.CLIENT_URL || "http://localhost:5173",
       credentials: true,
@@ -28,7 +31,7 @@ export const initializeSocket = (httpServer: HTTPServer) => {
   });
 
   // Middleware xác thực socket connection
-  io.use(async (socket: AuthSocket, next) => {
+  ioInstance.use(async (socket: AuthSocket, next) => {
     try {
       const token = socket.handshake.auth.token;
 
@@ -51,7 +54,7 @@ export const initializeSocket = (httpServer: HTTPServer) => {
   // Connection handler
   // ... imports
 
-  io.on("connection", async (socket: AuthSocket) => {
+  ioInstance.on("connection", async (socket: AuthSocket) => {
     const userId = socket.userId!;
 
     // --- 🔍 LOG DEBUG KẾT NỐI ---
@@ -69,11 +72,18 @@ export const initializeSocket = (httpServer: HTTPServer) => {
     // ... (Code update DB, emit user-online... giữ nguyên) ...
     // ... Copy logic cũ vào đây ...
     // ... Nhớ giữ đoạn io.emit("user-status-update", ...) ...
-
+    // Rất quan trọng: Cho socket tham gia vào phòng của chính userId của nó
+    socket.join(userId);
+    console.log(`Socket ${socket.id} joined user room: ${userId}`);
     // 1. Emit danh sách online users mới nhất
     const uniqueUserIds = [...new Set(onlineUsers.map(u => u.userId))];
-    io.emit("getOnlineUsers", uniqueUserIds);
+    ioInstance.emit("getOnlineUsers", uniqueUserIds);
 
+    // Emit trạng thái online của user này cho tất cả client
+    ioInstance.emit("user-status-update", { // <--- Dùng ioInstance.emit
+      userId,
+      status: "online"
+    });
     // ...
 
     socket.on("disconnect", async () => {
@@ -112,54 +122,16 @@ export const initializeSocket = (httpServer: HTTPServer) => {
       }
 
       const uniqueUserIds = [...new Set(onlineUsers.map(u => u.userId))];
-      io.emit("getOnlineUsers", uniqueUserIds);
+      ioInstance.emit("getOnlineUsers", uniqueUserIds);
 
-      io.emit("user-status-update", {
-        userId,
-        status: "offline",
-        lastSeen: lastSeenNow
-      });
-    });
-
-    /**
-     * Disconnect handler
-     */
-    socket.on("disconnect", async () => {
-      console.log(`User disconnected: ${userId} (${socket.id})`);
-
-      // Remove user from online users
-      const index = onlineUsers.findIndex((u) => u.socketId === socket.id);
-      if (index !== -1) {
-        onlineUsers.splice(index, 1);
-      }
-
-      // Lấy giờ hiện tại lúc ngắt kết nối
-      const lastSeenNow = new Date();
-
-      // Update user status to offline
-      try {
-        await User.findByIdAndUpdate(userId, {
-          status: "offline",
-          lastSeen: lastSeenNow, // Lưu giờ offline chính xác vào DB
-        });
-      } catch (error) {
-        console.error("Update user status error:", error);
-      }
-
-      // 1. Emit danh sách online users mới nhất
-      const uniqueUserIds = [...new Set(onlineUsers.map(u => u.userId))];
-      io.emit("getOnlineUsers", uniqueUserIds);
-
-      // 2. 🔥 THÊM MỚI: Báo cho toàn bộ Client biết User này vừa Offline lúc mấy giờ
-      // Client sẽ dùng biến 'lastSeen' này để hiển thị "Hoạt động X phút trước" chuẩn xác
-      io.emit("user-status-update", {
+      ioInstance.emit("user-status-update", {
         userId,
         status: "offline",
         lastSeen: lastSeenNow
       });
     });
   });
-  return io;
+  return ioInstance;
 };
 
 
@@ -295,6 +267,13 @@ export const getOnlineUsers = () => {
  */
 export const isUserOnline = (userId: string): boolean => {
   return onlineUsers.some((u) => u.userId === userId);
+};
+
+export const getIO = (): SocketIOServer => { // <--- THÊM 'export' TẠI ĐÂY
+    if (!ioInstance) { // <--- Dùng ioInstance
+        throw new Error("Socket.IO not initialized! Call initializeSocket first.");
+    }
+    return ioInstance; // <--- Trả về ioInstance
 };
 
 /**
